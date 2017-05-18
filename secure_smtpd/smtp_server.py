@@ -68,13 +68,13 @@ class SMTPServer(smtpd.SMTPServer):
                     asyncore.loop(map=map)
 
                     self.logger.error('_accept_subprocess(): asyncore loop exited.')
-            except (ExitNow, SSLError):
+            except (ExitNow, SSLError) as e:
+                self.logger.info('_accept_subprocess(): smtp channel terminated asyncore: %s', str(e))
                 self._shutdown_socket(newsocket)
-                self.logger.info('_accept_subprocess(): smtp channel terminated asyncore.')
             except Exception as e:
+                self.logger.error('_accept_subprocess(): uncaught exception: %s' % str(e))
                 if newsocket is not None:
                     self._shutdown_socket(newsocket)
-                self.logger.error('_accept_subprocess(): uncaught exception: %s' % str(e))
 
     def _shutdown_socket(self, s):
         try:
