@@ -90,6 +90,9 @@ class SMTPServer(smtpd.SMTPServer):
             def sig_handler(signal,frame):
                 self.logger.info("Got signal %s, shutting down." % signal)
                 sys.exit(0)
-            signal.signal(signal.SIGTERM, sig_handler)
+            try:
+                signal.signal(signal.SIGTERM, sig_handler)
+            except Exception as e:
+                self.logger.error('Failed to register signal: %s', str(e))
         while 1:
             time.sleep(1)
