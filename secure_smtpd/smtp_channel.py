@@ -1,14 +1,13 @@
-import secure_smtpd
 import smtpd
 import base64
 import secure_smtpd
 import asynchat
 import logging
+import ssl
 
 from asyncore import ExitNow
 NEWLINE = '\n'
 EMPTYSTRING = ''
-
 
 def decode_b64(data):
     '''Wrapper for b64decode, without having to struggle with bytestrings.'''
@@ -16,13 +15,11 @@ def decode_b64(data):
     decoded = base64.b64decode(byte_string)
     return decoded.decode('utf-8')
 
-
 def encode_b64(data):
     '''Wrapper for b64encode, without having to struggle with bytestrings.'''
     byte_string = data.encode('utf-8')
     encoded = base64.b64encode(byte_string)
     return encoded.decode('utf-8')
-
 
 class SMTPChannel(smtpd.SMTPChannel):
 
@@ -59,7 +56,19 @@ class SMTPChannel(smtpd.SMTPChannel):
             self.__greeting = arg
             self.push('250-%s Hello %s' % (self.__fqdn, arg))
             self.push('250-AUTH LOGIN PLAIN')
-            self.push('250 EHLO')
+            self.push('250 STARTTLS')
+
+    def smtp_STARTTLS(self, arg):
+        if arg:
+            self.push('501 Syntax: STARTTLS')
+        elif not isinstance(self.socket, ssl.SSLSocket):
+            self.push('220 Ready to start TLS')
+            self.socket.settimeout(self.smtp_server.maximum_execution_time)
+            self.socket = ssl.wrap_socket(self.socket, server_side=True, certfile=self.smtp_server.certfile,
+                    keyfile=self.smtp_server.keyfile, ssl_version=self.smtp_server.ssl_version)
+            self.__greeting = ''
+        else:
+            self.push('454 TLS Failed')
 
     def smtp_AUTH(self, arg):
         if 'PLAIN' in arg:
@@ -130,7 +139,7 @@ class SMTPChannel(smtpd.SMTPChannel):
                 arg = line[i + 1:].strip()
 
             # White list of operations that are allowed prior to AUTH.
-            if not command in ['AUTH', 'EHLO', 'HELO', 'NOOP', 'RSET', 'QUIT']:
+            if not command in ['AUTH', 'EHLO', 'HELO', 'NOOP', 'RSET', 'QUIT', 'STARTTLS']:
                 if self.require_authentication and not self.authenticated:
                     self.push('530 Authentication required')
                     return
